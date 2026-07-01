@@ -6,7 +6,9 @@ cells = []
 cells.append(nbf.v4.new_markdown_cell(
 "# TP Data Integration & Applications — ST2DLDI\n"
 "**Dataset:** Road traffic injury accidents — France 2024 (data.gouv.fr)  \n"
-"**Architecture:** Medallion (Bronze → Silver → Gold)"
+"**Architecture:** Medallion (Bronze → Silver → Gold)  \n"
+"**Data Quality Summary dashboard (Streamlit):** "
+"https://accidents-routiers-2024-hasbwsxbbqcebewpwlwl9n.streamlit.app/"
 ))
 
 cells.append(nbf.v4.new_markdown_cell("## Part 1 — Data Profiling & Data Quality"))
@@ -251,6 +253,9 @@ cells.append(nbf.v4.new_code_cell(
 
 cells.append(nbf.v4.new_markdown_cell(
 "### D. Quality summary\n\n"
+"An interactive version of this Data Quality Summary (live KPIs, quality report, categorical "
+"anomaly checks, primary keys, and a map of geographic outliers) is deployed as a Streamlit "
+"app: https://accidents-routiers-2024-hasbwsxbbqcebewpwlwl9n.streamlit.app/\n\n"
 "| Issue | Column | Action |\n"
 "|---|---|---|\n"
 "| 100% empty | locations.lartpc | Drop |\n"

@@ -124,18 +124,33 @@ for name, key in key_candidates.items():
 key_df = pd.DataFrame(key_rows)
 
 # --------------------------------------------------------------- KPIs
-st.subheader("Key indicators")
+st.subheader("Dataset scale")
+s1, s2, s3, s4 = st.columns(4)
+s1.metric("Accidents", f"{len(characteristics):,}", help="1 row = 1 accident (characteristics table)")
+s2.metric("People involved", f"{len(users):,}", help="1 row = 1 person (users table)")
+s3.metric("Vehicles involved", f"{len(vehicles):,}", help="1 row = 1 vehicle (vehicles table)")
+s4.metric("Location records", f"{len(locations):,}", help="Locations table: more rows than accidents, see Primary keys detail below")
+
+avg_people = len(users) / len(characteristics)
+avg_vehicles = len(vehicles) / len(characteristics)
+s5, s6, s7, s8 = st.columns(4)
+s5.metric("Avg. people / accident", f"{avg_people:.2f}")
+s6.metric("Avg. vehicles / accident", f"{avg_vehicles:.2f}")
+s7.metric("Killed", f"{int((users['grav'] == 2).sum()):,}", help="grav = 2 (official ONISR code)")
+s8.metric("Reference year", reference_year)
+
+st.subheader("Key quality indicators")
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("Rows loaded (Bronze, 4 files)", f"{sum(len(df) for df in tables.values()):,}")
-k2.metric("Points outside mainland France", f"{outside_mainland:,}", help="Classified by department code (971-978, 986-988)")
-k3.metric("Duplicate rows (locations)", duplicates["locations"])
-k4.metric("Age anomalies", negative_ages + outlier_ages, help=f"Negative ages + ages over 110, reference year {reference_year}")
+k1.metric("Points outside mainland France", f"{outside_mainland:,}", help="Classified by department code (971-978, 986-988)")
+k2.metric("Duplicate rows (locations)", duplicates["locations"])
+k3.metric("Age anomalies", negative_ages + outlier_ages, help=f"Negative ages + ages over 110, reference year {reference_year}")
+k4.metric("Swapped lat/long values", swapped_count, help="Rows where lat and long are likely inverted (closer to their department's median once swapped)")
 
 k5, k6, k7, k8 = st.columns(4)
-k5.metric("Swapped lat/long values", swapped_count, help="Rows where lat and long are likely inverted (closer to their department's median once swapped)")
-k6.metric("Placeholder -1 values (sexe)", f"{neg_sexe:,}")
-k7.metric("Categorical anomalies", f"{(category_df['Status'] == 'Anomaly').sum()} / {len(category_df)}", help="Columns with unexpected values, out of all enumerated columns checked")
-k8.metric("Tables with a unique key", f"{int(key_df['Unique'].sum())} / {len(key_df)}")
+k5.metric("Placeholder -1 values (sexe)", f"{neg_sexe:,}")
+k6.metric("Categorical anomalies", f"{(category_df['Status'] == 'Anomaly').sum()} / {len(category_df)}", help="Columns with unexpected values, out of all enumerated columns checked")
+k7.metric("Tables with a unique key", f"{int(key_df['Unique'].sum())} / {len(key_df)}")
+k8.metric("Worst missing rate", f"{worst_missing.iloc[0]:.0f}%", help=f"{worst_missing.index[0]}")
 
 st.divider()
 

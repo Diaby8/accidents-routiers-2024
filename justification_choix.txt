@@ -12,12 +12,15 @@ aurait pu induire en erreur lors des analyses.
 
 2. TRAITEMENT DES DOM-TOM
 --------------------------
-Les 3 339 accidents dont les coordonnées GPS sont hors des bornes de la France
-métropolitaine (lat < 41° ou lat > 52°) correspondent aux territoires d'outre-mer
-(Martinique, Réunion, Guyane, etc.). Ce ne sont pas des erreurs : ce sont de vraies
-données valides. Nous avons choisi de les mettre de côté dans un fichier séparé
-plutôt que de les supprimer, afin de limiter l'analyse à la France métropolitaine
-tout en conservant ces données pour une éventuelle étude ultérieure.
+Les 3 344 accidents dont le code département est 971-978 ou 986-988 correspondent
+aux territoires d'outre-mer (Martinique, Réunion, Guyane, etc.). Ce ne sont pas des
+erreurs : ce sont de vraies données valides. La séparation se fait sur le code
+département plutôt que sur un seuil de latitude : un seuil (lat < 41° ou lat > 52°)
+est peu fiable, il classe à tort Saint-Pierre-et-Miquelon (dép. 975, latitude ~46-47°,
+dans la plage métropolitaine) comme métropole, et peut classer le sud de la Corse
+(dép. 2B) comme DOM-TOM. Nous avons choisi de mettre ces lignes de côté dans un
+fichier séparé plutôt que de les supprimer, afin de limiter l'analyse à la France
+métropolitaine tout en conservant ces données pour une éventuelle étude ultérieure.
 
 3. REMPLACEMENT DES VALEURS -1 PAR NaN
 ----------------------------------------

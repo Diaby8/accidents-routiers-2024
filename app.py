@@ -22,8 +22,8 @@ st.title("Data Quality Summary")
 st.caption("TP Data Integration & Applications — ST2DLDI — Partie 1.D")
 
 # --- métriques calculées en direct sur les données Bronze ---
-lat_f = pd.to_numeric(caract["lat"].str.replace(",", "."), errors="coerce")
-hors_metro = int(((lat_f < 41) | (lat_f > 52)).sum())
+DOMTOM_DEP = {"971", "972", "973", "974", "975", "976", "977", "978", "986", "987", "988"}
+hors_metro = int(caract["dep"].astype(str).isin(DOMTOM_DEP).sum())
 
 neg_sexe = int((usagers["sexe"] < 0).sum())
 neg_place = int((usagers["place"] < 0).sum())
@@ -88,7 +88,7 @@ def build_map_data(caract, usagers):
     df["lat"] = pd.to_numeric(df["lat"].str.replace(",", "."), errors="coerce")
     df["long"] = pd.to_numeric(df["long"].str.replace(",", "."), errors="coerce")
     df = df.dropna(subset=["lat", "long"])
-    df["zone"] = np.where((df["lat"] >= 41) & (df["lat"] <= 52), "Metropole", "DOM-TOM")
+    df["zone"] = np.where(df["dep"].astype(str).isin(DOMTOM_DEP), "DOM-TOM", "Metropole")
 
     gravite_max = usagers.groupby("Num_Acc")["grav"].max().reset_index()
     gravite_max.columns = ["Num_Acc", "gravite_max"]

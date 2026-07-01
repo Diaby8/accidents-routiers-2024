@@ -7,6 +7,8 @@ st.set_page_config(page_title="Data Quality Summary — Road Accidents France 20
 
 DOMTOM_DEP = {"971", "972", "973", "974", "975", "976", "977", "978", "986", "987", "988"}
 ZONE_COLORS = {"Metropole": "#3498db", "DOM-TOM": "#e74c3c"}
+# grav codes per the official ONISR BAAC codebook: 1=Uninjured, 2=Killed, 3=Hospitalized, 4=Slight injury
+GRAV_LABELS = {1: "Uninjured", 2: "Killed", 3: "Hospitalized injury", 4: "Slight injury"}
 
 EXPECTED_CHARACTERISTICS = {
     "lum": [1, 2, 3, 4, 5], "agg": [1, 2], "int": list(range(1, 10)),
@@ -77,20 +79,41 @@ worst_missing = pd.concat(
 
 
 @st.cache_data
-def find_coordinate_swaps(characteristics):
+def fix_coordinates(characteristics):
+    """Detect and correct lat/long values that are swapped and/or sign-flipped.
+
+    For each row, try a set of plausible coordinate corruptions (swap lat/long,
+    flip a sign, or both) and keep whichever lands closest to the row's own
+    department median. Data-driven: no hardcoded real-world coordinates.
+    """
     coords = characteristics.dropna(subset=["lat", "long"]).copy()
     coords["lat_num"] = pd.to_numeric(coords["lat"].astype(str).str.replace(",", "."), errors="coerce")
     coords["long_num"] = pd.to_numeric(coords["long"].astype(str).str.replace(",", "."), errors="coerce")
     coords = coords.dropna(subset=["lat_num", "long_num"])
     dept_median = coords.groupby("dep")[["lat_num", "long_num"]].transform("median")
-    dist_normal = np.sqrt((coords["lat_num"] - dept_median["lat_num"]) ** 2 + (coords["long_num"] - dept_median["long_num"]) ** 2)
-    dist_swapped = np.sqrt((coords["long_num"] - dept_median["lat_num"]) ** 2 + (coords["lat_num"] - dept_median["long_num"]) ** 2)
-    is_swapped = (dist_swapped < dist_normal) & (dist_normal > 1.0)
-    return coords.index[is_swapped]
+    lat_, long_ = coords["lat_num"], coords["long_num"]
+
+    candidates = {
+        "swap": (long_, lat_),
+        "neg_lat": (-lat_, long_),
+        "neg_long": (lat_, -long_),
+        "swap_neg_lat": (-long_, lat_),
+        "swap_neg_long": (long_, -lat_),
+    }
+    best_dist = np.sqrt((lat_ - dept_median["lat_num"]) ** 2 + (long_ - dept_median["long_num"]) ** 2)
+    best_lat, best_long = lat_.copy(), long_.copy()
+    for lat_try, long_try in candidates.values():
+        dist_try = np.sqrt((lat_try - dept_median["lat_num"]) ** 2 + (long_try - dept_median["long_num"]) ** 2)
+        better = (dist_try < best_dist) & (best_dist > 1.0) & (dist_try < 0.5)
+        best_lat[better], best_long[better] = lat_try[better], long_try[better]
+        best_dist[better] = dist_try[better]
+
+    fixed = best_lat.ne(lat_) | best_long.ne(long_)
+    return pd.DataFrame({"lat": best_lat[fixed], "long": best_long[fixed]})
 
 
-swap_idx = find_coordinate_swaps(characteristics)
-swapped_count = len(swap_idx)
+fixed_coords = fix_coordinates(characteristics)
+swapped_count = len(fixed_coords)
 
 expected_by_table = {
     "characteristics": (characteristics, EXPECTED_CHARACTERISTICS),
@@ -215,18 +238,23 @@ st.caption(
 
 
 @st.cache_data
-def build_map_data(characteristics, _swap_idx):
+def build_map_data(characteristics, users, _fixed_coords):
     df = characteristics.copy()
     df["lat"] = pd.to_numeric(df["lat"].str.replace(",", "."), errors="coerce")
     df["long"] = pd.to_numeric(df["long"].str.replace(",", "."), errors="coerce")
-    df.loc[_swap_idx, ["lat", "long"]] = df.loc[_swap_idx, ["long", "lat"]].values
+    df.loc[_fixed_coords.index, ["lat", "long"]] = _fixed_coords[["lat", "long"]].values
     df = df.dropna(subset=["lat", "long"])
     df["zone"] = df["dep"].astype(str).isin(DOMTOM_DEP).map({True: "DOM-TOM", False: "Metropole"})
-    df["was_swapped"] = df.index.isin(_swap_idx)
+    df["was_swapped"] = df.index.isin(_fixed_coords.index)
+    df["dep"] = df["dep"].astype(str)
+
+    max_severity = users.groupby("Num_Acc")["grav"].max().rename("max_severity")
+    df = df.merge(max_severity, on="Num_Acc", how="left")
+    df["severity"] = df["max_severity"].map(GRAV_LABELS).fillna("Unknown")
     return df
 
 
-map_data = build_map_data(characteristics, swap_idx)
+map_data = build_map_data(characteristics, users, fixed_coords)
 
 zone_counts = map_data["zone"].value_counts()
 c1, c2, c3 = st.columns(3)
@@ -234,9 +262,24 @@ c1.metric("Mainland France points", f"{zone_counts.get('Metropole', 0):,}")
 c2.metric("DOM-TOM points", f"{zone_counts.get('DOM-TOM', 0):,}")
 c3.metric("Corrected swapped points", int(map_data["was_swapped"].sum()))
 
-show_zones = st.multiselect("Show zone(s)", options=["Metropole", "DOM-TOM"], default=["Metropole"])
-filtered = map_data[map_data["zone"].isin(show_zones)]
+f1, f2 = st.columns(2)
+show_zones = f1.multiselect("Show zone(s)", options=["Metropole", "DOM-TOM"], default=["Metropole"])
+show_severity = f2.multiselect(
+    "Severity", options=["Killed", "Hospitalized injury", "Slight injury", "Uninjured"],
+    default=["Killed", "Hospitalized injury", "Slight injury", "Uninjured"],
+)
+
+dep_options = sorted(map_data.loc[map_data["zone"].isin(show_zones), "dep"].unique())
+show_deps = st.multiselect("Department(s) (leave empty = all)", options=dep_options, default=[])
+
+filtered = map_data[map_data["zone"].isin(show_zones) & map_data["severity"].isin(show_severity)]
+if show_deps:
+    filtered = filtered[filtered["dep"].isin(show_deps)]
 st.caption(f"{len(filtered):,} points displayed")
+
+if filtered.empty:
+    st.warning("No accident matches the selected filters.")
+    st.stop()
 
 if set(show_zones) == {"Metropole"}:
     center, zoom = {"lat": 46.6, "lon": 2.4}, 4.7
@@ -249,7 +292,7 @@ fig_map = px.scatter_map(
     filtered,
     lat="lat", lon="long", color="zone",
     color_discrete_map=ZONE_COLORS,
-    hover_data={"dep": True, "was_swapped": True, "lat": False, "long": False},
+    hover_data={"dep": True, "severity": True, "was_swapped": True, "lat": False, "long": False},
     center=center, zoom=zoom, height=560,
     opacity=0.55,
 )

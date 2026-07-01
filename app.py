@@ -234,16 +234,29 @@ c1.metric("Mainland France points", f"{zone_counts.get('Metropole', 0):,}")
 c2.metric("DOM-TOM points", f"{zone_counts.get('DOM-TOM', 0):,}")
 c3.metric("Corrected swapped points", int(map_data["was_swapped"].sum()))
 
-show_zones = st.multiselect("Show zone(s)", options=["Metropole", "DOM-TOM"], default=["Metropole", "DOM-TOM"])
+show_zones = st.multiselect("Show zone(s)", options=["Metropole", "DOM-TOM"], default=["Metropole"])
 filtered = map_data[map_data["zone"].isin(show_zones)]
 st.caption(f"{len(filtered):,} points displayed")
+
+if set(show_zones) == {"Metropole"}:
+    center, zoom = {"lat": 46.6, "lon": 2.4}, 4.7
+elif set(show_zones) == {"DOM-TOM"}:
+    center, zoom = {"lat": 0, "lon": 20}, 1.2
+else:
+    center, zoom = {"lat": 15, "lon": 15}, 1.1
 
 fig_map = px.scatter_map(
     filtered,
     lat="lat", lon="long", color="zone",
     color_discrete_map=ZONE_COLORS,
     hover_data={"dep": True, "was_swapped": True, "lat": False, "long": False},
-    zoom=1.5, height=520,
+    center=center, zoom=zoom, height=560,
+    opacity=0.55,
 )
-fig_map.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
+fig_map.update_traces(marker=dict(size=6))
+fig_map.update_layout(
+    map_style="carto-positron",
+    margin={"r": 0, "t": 0, "l": 0, "b": 0},
+    legend=dict(title="Zone", yanchor="top", y=0.98, xanchor="left", x=0.01, bgcolor="rgba(255,255,255,0.7)"),
+)
 st.plotly_chart(fig_map, width='stretch')

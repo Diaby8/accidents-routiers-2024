@@ -1,4 +1,4 @@
-Num_Acc,type_route,etat_surface,infrastructure,situation,vitesse_max,profil_route,trace_plan
+Num_Acc,road_type,road_surface,infrastructure,situation,speed_limit,road_profile,road_layout
 202400000001,3,1,0,1,90,1,2
 202400000002,4,9,0,1,30,1,1
 202400000002,4,9,0,1,30,1,1

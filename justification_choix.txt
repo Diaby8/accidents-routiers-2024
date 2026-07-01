@@ -1,74 +1,79 @@
-JUSTIFICATION DES CHOIX DE CONCEPTION
+JUSTIFICATION OF DESIGN CHOICES
 TP Data Integration & Applications — ST2DLDI
-Dataset : Accidents corporels de la route, France 2024 (data.gouv.fr)
+Dataset: Road traffic injury accidents, France 2024 (data.gouv.fr)
 ======================================================================
 
-1. SUPPRESSION DES COLONNES QUASI VIDES
+1. DROPPING NEAR-EMPTY COLUMNS
 ----------------------------------------
-Les colonnes lartpc (100% vide), v2 (91.6% vide) et occutc (99% vide) ont été
-supprimées dès la couche Silver. Une colonne avec presque aucune donnée n'apporte
-aucune information exploitable et alourdit inutilement le dataset. Les garder
-aurait pu induire en erreur lors des analyses.
+Columns lartpc (100% empty), v2 (91.6% empty) and occutc (99% empty) were
+dropped as early as the Silver layer. A column with almost no data carries no
+usable information and needlessly bloats the dataset. Keeping them could have
+been misleading during analysis.
 
-2. TRAITEMENT DES DOM-TOM
+2. HANDLING DOM-TOM
 --------------------------
-Les 3 344 accidents dont le code département est 971-978 ou 986-988 correspondent
-aux territoires d'outre-mer (Martinique, Réunion, Guyane, etc.). Ce ne sont pas des
-erreurs : ce sont de vraies données valides. La séparation se fait sur le code
-département plutôt que sur un seuil de latitude : un seuil (lat < 41° ou lat > 52°)
-est peu fiable, il classe à tort Saint-Pierre-et-Miquelon (dép. 975, latitude ~46-47°,
-dans la plage métropolitaine) comme métropole, et peut classer le sud de la Corse
-(dép. 2B) comme DOM-TOM. Nous avons choisi de mettre ces lignes de côté dans un
-fichier séparé plutôt que de les supprimer, afin de limiter l'analyse à la France
-métropolitaine tout en conservant ces données pour une éventuelle étude ultérieure.
+The 3,344 accidents whose department code is 971-978 or 986-988 correspond to
+overseas territories (Martinique, Reunion, Guyane, etc.). These are not
+errors: they are genuine, valid data. The split is done on the department
+code rather than a latitude threshold: a threshold (lat < 41 deg or lat > 52
+deg) is unreliable, it wrongly classifies Saint-Pierre-et-Miquelon (dep. 975,
+latitude ~46-47 deg, within the mainland range) as mainland France, and can
+classify southern Corsica (dep. 2B) as DOM-TOM. We chose to set these rows
+aside in a separate file rather than delete them, in order to scope the
+analysis to mainland France while keeping this data available for a future
+study.
 
-3. REMPLACEMENT DES VALEURS -1 PAR NaN
+3. REPLACING -1 VALUES WITH NaN
 ----------------------------------------
-Dans ce dataset, la valeur -1 est utilisée comme code pour signifier "non renseigné".
-Si on la laissait telle quelle, tous les calculs statistiques (moyennes, distributions)
-seraient faussés car Python la traiterait comme une vraie valeur numérique. La
-remplacer par NaN (Not a Number) est la convention standard pour représenter une
-valeur inconnue et permet aux fonctions pandas de l'ignorer automatiquement.
+In this dataset, -1 is used as a code meaning "not specified". Left as-is,
+every statistical computation (averages, distributions) would be biased
+because Python would treat it as a real numeric value. Replacing it with NaN
+(Not a Number) is the standard convention for representing an unknown value
+and lets pandas functions ignore it automatically.
 
-4. IMPUTATION DE "INCONNU" SUR LES CHAMPS TEXTE MANQUANTS
+4. IMPUTING "UNKNOWN" ON MISSING TEXT FIELDS
 -----------------------------------------------------------
-Pour les colonnes adr (adresse, 4.2% vide) et voie (19% vide), nous avons choisi
-d'imputer la valeur "Inconnu" plutôt que de supprimer les lignes concernées. Supprimer
-une ligne entière à cause d'une adresse manquante ferait perdre toutes les autres
-informations de cet accident (date, gravité, météo, etc.) qui restent exploitables.
+For columns adr (address, 4.2% empty) and voie (road number, 19% empty), we
+chose to impute "Unknown" rather than drop the affected rows. Dropping an
+entire row because of a missing address would discard every other piece of
+information about that accident (date, severity, weather, etc.) that remains
+usable.
 
-5. ENRICHISSEMENT DES DONNÉES
+5. DATA ENRICHMENT
 ------------------------------
-Deux colonnes ont été ajoutées car elles n'existent pas dans les données brutes mais
-sont directement utiles pour l'analyse :
+Two columns were added because they don't exist in the raw data but are
+directly useful for analysis:
 
-- tranche_horaire : regroupe l'heure de l'accident en 4 catégories (Matin, Après-midi,
-  Soir, Nuit). Plus lisible qu'une heure brute pour identifier les périodes à risque.
+- time_of_day: buckets the accident hour into 4 categories (Morning,
+  Afternoon, Evening, Night). More readable than a raw hour for identifying
+  at-risk periods.
 
-- gravite_max : indique la gravité la plus sévère parmi tous les usagers impliqués
-  dans un même accident. Permet de qualifier chaque accident d'un seul chiffre
-  représentatif sans avoir à croiser la table usagers à chaque requête.
+- max_severity: indicates the most severe outcome among all users involved in
+  the same accident. Lets each accident be characterized by a single,
+  representative figure without having to join the users table on every
+  query.
 
-6. CHOIX DU MODÈLE EN ÉTOILE POUR LA COUCHE GOLD
+6. CHOICE OF A STAR SCHEMA FOR THE GOLD LAYER
 --------------------------------------------------
-Trois modèles étaient envisageables pour organiser la couche Gold :
+Three models were considered for organizing the Gold layer:
 
-- Table plate : tout dans une seule table. Simple mais pleine de doublons car un
-  accident implique plusieurs véhicules et plusieurs usagers.
+- Flat table: everything in a single table. Simple but full of duplicates
+  since an accident involves multiple vehicles and multiple users.
 
-- Modèle en flocon (Snowflake) : les dimensions sont elles-mêmes décomposées en
-  sous-tables (ex: dim_lieu → dim_departement → dim_region). Plus normalisé mais
-  plus complexe à interroger et justifié seulement pour des datasets très grands.
+- Snowflake schema: dimensions are themselves broken down into sub-tables
+  (e.g. dim_location -> dim_department -> dim_region). More normalized but
+  more complex to query, and justified only for very large datasets.
 
-- Modèle en étoile (Star Schema) : une table de faits centrale reliée à des tables
-  de dimensions. C'est le choix retenu.
+- Star schema: a central fact table linked to dimension tables. This is the
+  option chosen.
 
-Nous avons choisi le modèle en étoile car :
-  - Il est adapté à la complexité réelle des données (un accident = plusieurs
-    véhicules et usagers, d'où des tables séparées)
-  - Il est performant pour les analyses BI (peu de jointures nécessaires)
-  - Il correspond exactement à ce que le TP suggère : "fact table + dimensions"
-  - Il est plus simple à maintenir et à comprendre que le flocon pour ce cas d'usage
+We chose the star schema because:
+  - It fits the real complexity of the data (one accident = several
+    vehicles and users, hence separate tables)
+  - It performs well for BI analysis (few joins needed)
+  - It matches exactly what the assignment suggests: "fact table + dimensions"
+  - It is simpler to maintain and understand than a snowflake schema for this
+    use case
 
-La clé de jointure entre toutes les tables est Num_Acc (numéro unique de l'accident),
-ce qui permet de reconstruire facilement une vue complète de n'importe quel accident.
+The join key across every table is Num_Acc (unique accident number), which
+makes it easy to reconstruct a complete view of any accident.

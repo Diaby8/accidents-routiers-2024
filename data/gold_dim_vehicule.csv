@@ -1,4 +1,4 @@
-Num_Acc,id_vehicule,type_vehicule,manoeuvre,obstacle_fixe,obstacle_mobile,point_choc,motorisation
+Num_Acc,id_vehicule,vehicle_type,maneuver,fixed_obstacle,moving_obstacle,impact_point,engine_type
 202400000001,155Â 781Â 758,7,13,0,2,1,1
 202400000001,155Â 781Â 759,14,21,0,2,2,1
 202400000002,155Â 781Â 757,10,15,0,1,3,1

@@ -153,7 +153,7 @@ quality_report = pd.DataFrame([
     {"Issue": "Swapped lat/long values", "Column": "characteristics.lat/long", "Action": "Swap back (detected vs department median)"},
     {"Issue": "No unique key per accident", "Column": "locations.Num_Acc", "Action": "Keep first row per accident in dim_location (Gold layer)"},
 ])
-st.dataframe(quality_report, use_container_width=True, hide_index=True)
+st.dataframe(quality_report, width='stretch', hide_index=True)
 
 with st.expander("Detail: % missing values per table"):
     for name, pct in missing_pct.items():
@@ -161,13 +161,13 @@ with st.expander("Detail: % missing values per table"):
         if pct.empty:
             st.write("no missing values")
         else:
-            st.dataframe(pct.rename("% missing").round(1), use_container_width=True)
+            st.dataframe(pct.rename("% missing").round(1), width='stretch')
 
 with st.expander(f"Detail: categorical value checks ({len(category_df)} columns across 4 tables)"):
-    st.dataframe(category_df, use_container_width=True, hide_index=True)
+    st.dataframe(category_df, width='stretch', hide_index=True)
 
 with st.expander("Detail: primary key candidates"):
-    st.dataframe(key_df, use_container_width=True, hide_index=True)
+    st.dataframe(key_df, width='stretch', hide_index=True)
     st.caption(
         "`locations` has no unique single-column key: some accidents have several rows "
         "(e.g. one per named road at a complex intersection), so `Num_Acc` repeats."
@@ -200,14 +200,14 @@ st.caption(
 
 
 @st.cache_data
-def build_map_data(characteristics, swap_idx):
+def build_map_data(characteristics, _swap_idx):
     df = characteristics.copy()
     df["lat"] = pd.to_numeric(df["lat"].str.replace(",", "."), errors="coerce")
     df["long"] = pd.to_numeric(df["long"].str.replace(",", "."), errors="coerce")
-    df.loc[swap_idx, ["lat", "long"]] = df.loc[swap_idx, ["long", "lat"]].values
+    df.loc[_swap_idx, ["lat", "long"]] = df.loc[_swap_idx, ["long", "lat"]].values
     df = df.dropna(subset=["lat", "long"])
     df["zone"] = df["dep"].astype(str).isin(DOMTOM_DEP).map({True: "DOM-TOM", False: "Metropole"})
-    df["was_swapped"] = df.index.isin(swap_idx)
+    df["was_swapped"] = df.index.isin(_swap_idx)
     return df
 
 
@@ -231,4 +231,4 @@ fig_map = px.scatter_map(
     zoom=1.5, height=520,
 )
 fig_map.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
-st.plotly_chart(fig_map, use_container_width=True)
+st.plotly_chart(fig_map, width='stretch')

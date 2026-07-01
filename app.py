@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import streamlit as st
+import plotly.express as px
 
 st.set_page_config(page_title="Data Quality Summary — Accidents Routiers 2024", layout="wide")
 
@@ -76,3 +77,73 @@ st.markdown(
     "- **Doublons** dans `lieux` : gonfleraient les comptages sur certaines routes.\n"
     "- **Ages** : aucune anomalie detectee (0 age negatif, 0 age > 110 ans)."
 )
+
+st.divider()
+st.subheader("Cartographie des accidents")
+
+
+@st.cache_data
+def build_map_data(caract, usagers):
+    df = caract.copy()
+    df["lat"] = pd.to_numeric(df["lat"].str.replace(",", "."), errors="coerce")
+    df["long"] = pd.to_numeric(df["long"].str.replace(",", "."), errors="coerce")
+    df = df.dropna(subset=["lat", "long"])
+    df["zone"] = np.where((df["lat"] >= 41) & (df["lat"] <= 52), "Metropole", "DOM-TOM")
+
+    gravite_max = usagers.groupby("Num_Acc")["grav"].max().reset_index()
+    gravite_max.columns = ["Num_Acc", "gravite_max"]
+    df = df.merge(gravite_max, on="Num_Acc", how="left")
+
+    grav_labels = {1: "Indemne", 2: "Blesse hospitalise", 3: "Blesse leger", 4: "Tue"}
+    df["gravite_label"] = df["gravite_max"].map(grav_labels)
+
+    meteo_labels = {
+        1: "Normale", 2: "Pluie legere", 3: "Pluie forte", 4: "Neige/grele",
+        5: "Brouillard/fumee", 6: "Vent fort/tempete", 7: "Temps eblouissant",
+        8: "Temps couvert", 9: "Autre",
+    }
+    df["meteo_label"] = df["atm"].map(meteo_labels).fillna("Inconnu")
+    return df
+
+
+map_data = build_map_data(caract, usagers)
+
+inclure_domtom = st.checkbox(
+    f"Inclure les DOM-TOM ({(map_data['zone'] == 'DOM-TOM').sum():,} accidents)",
+    value=True,
+)
+zones = ["Metropole", "DOM-TOM"] if inclure_domtom else ["Metropole"]
+
+col_a, col_b = st.columns(2)
+gravites = col_a.multiselect(
+    "Gravite", options=sorted(map_data["gravite_label"].dropna().unique()),
+    default=list(map_data["gravite_label"].dropna().unique()),
+)
+meteos = col_b.multiselect(
+    "Meteo", options=sorted(map_data["meteo_label"].dropna().unique()),
+    default=list(map_data["meteo_label"].dropna().unique()),
+)
+
+filtered = map_data[
+    map_data["zone"].isin(zones)
+    & map_data["gravite_label"].isin(gravites)
+    & map_data["meteo_label"].isin(meteos)
+]
+st.caption(
+    f"{len(filtered):,} accidents affiches "
+    f"({(filtered['zone'] == 'Metropole').sum():,} metropole, "
+    f"{(filtered['zone'] == 'DOM-TOM').sum():,} DOM-TOM)"
+)
+
+fig = px.scatter_map(
+    filtered,
+    lat="lat", lon="long", color="gravite_label",
+    hover_data=["meteo_label", "dep", "zone"],
+    zoom=1.5 if inclure_domtom else 4.5, height=550,
+    color_discrete_map={
+        "Indemne": "green", "Blesse leger": "gold",
+        "Blesse hospitalise": "orange", "Tue": "red",
+    },
+)
+fig.update_layout(map_style="open-street-map", margin={"r": 0, "t": 0, "l": 0, "b": 0})
+st.plotly_chart(fig, use_container_width=True)

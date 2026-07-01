@@ -1,0 +1,71 @@
+JUSTIFICATION DES CHOIX DE CONCEPTION
+TP Data Integration & Applications — ST2DLDI
+Dataset : Accidents corporels de la route, France 2024 (data.gouv.fr)
+======================================================================
+
+1. SUPPRESSION DES COLONNES QUASI VIDES
+----------------------------------------
+Les colonnes lartpc (100% vide), v2 (91.6% vide) et occutc (99% vide) ont été
+supprimées dès la couche Silver. Une colonne avec presque aucune donnée n'apporte
+aucune information exploitable et alourdit inutilement le dataset. Les garder
+aurait pu induire en erreur lors des analyses.
+
+2. TRAITEMENT DES DOM-TOM
+--------------------------
+Les 3 339 accidents dont les coordonnées GPS sont hors des bornes de la France
+métropolitaine (lat < 41° ou lat > 52°) correspondent aux territoires d'outre-mer
+(Martinique, Réunion, Guyane, etc.). Ce ne sont pas des erreurs : ce sont de vraies
+données valides. Nous avons choisi de les mettre de côté dans un fichier séparé
+plutôt que de les supprimer, afin de limiter l'analyse à la France métropolitaine
+tout en conservant ces données pour une éventuelle étude ultérieure.
+
+3. REMPLACEMENT DES VALEURS -1 PAR NaN
+----------------------------------------
+Dans ce dataset, la valeur -1 est utilisée comme code pour signifier "non renseigné".
+Si on la laissait telle quelle, tous les calculs statistiques (moyennes, distributions)
+seraient faussés car Python la traiterait comme une vraie valeur numérique. La
+remplacer par NaN (Not a Number) est la convention standard pour représenter une
+valeur inconnue et permet aux fonctions pandas de l'ignorer automatiquement.
+
+4. IMPUTATION DE "INCONNU" SUR LES CHAMPS TEXTE MANQUANTS
+-----------------------------------------------------------
+Pour les colonnes adr (adresse, 4.2% vide) et voie (19% vide), nous avons choisi
+d'imputer la valeur "Inconnu" plutôt que de supprimer les lignes concernées. Supprimer
+une ligne entière à cause d'une adresse manquante ferait perdre toutes les autres
+informations de cet accident (date, gravité, météo, etc.) qui restent exploitables.
+
+5. ENRICHISSEMENT DES DONNÉES
+------------------------------
+Deux colonnes ont été ajoutées car elles n'existent pas dans les données brutes mais
+sont directement utiles pour l'analyse :
+
+- tranche_horaire : regroupe l'heure de l'accident en 4 catégories (Matin, Après-midi,
+  Soir, Nuit). Plus lisible qu'une heure brute pour identifier les périodes à risque.
+
+- gravite_max : indique la gravité la plus sévère parmi tous les usagers impliqués
+  dans un même accident. Permet de qualifier chaque accident d'un seul chiffre
+  représentatif sans avoir à croiser la table usagers à chaque requête.
+
+6. CHOIX DU MODÈLE EN ÉTOILE POUR LA COUCHE GOLD
+--------------------------------------------------
+Trois modèles étaient envisageables pour organiser la couche Gold :
+
+- Table plate : tout dans une seule table. Simple mais pleine de doublons car un
+  accident implique plusieurs véhicules et plusieurs usagers.
+
+- Modèle en flocon (Snowflake) : les dimensions sont elles-mêmes décomposées en
+  sous-tables (ex: dim_lieu → dim_departement → dim_region). Plus normalisé mais
+  plus complexe à interroger et justifié seulement pour des datasets très grands.
+
+- Modèle en étoile (Star Schema) : une table de faits centrale reliée à des tables
+  de dimensions. C'est le choix retenu.
+
+Nous avons choisi le modèle en étoile car :
+  - Il est adapté à la complexité réelle des données (un accident = plusieurs
+    véhicules et usagers, d'où des tables séparées)
+  - Il est performant pour les analyses BI (peu de jointures nécessaires)
+  - Il correspond exactement à ce que le TP suggère : "fact table + dimensions"
+  - Il est plus simple à maintenir et à comprendre que le flocon pour ce cas d'usage
+
+La clé de jointure entre toutes les tables est Num_Acc (numéro unique de l'accident),
+ce qui permet de reconstruire facilement une vue complète de n'importe quel accident.
